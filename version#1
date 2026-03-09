@@ -1,0 +1,73 @@
+# SETI Analysis GUI (Run Only Version)
+# Python 3.x
+# Required libraries: pip install blimpy turbo-seti tqdm tkinter
+
+import os
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from tqdm import tqdm
+from blimpy import Waterfall
+from turbo_seti.find_doppler.find_doppler import FindDoppler
+
+class SETIAutoRunApp:
+    def __init__(self, master):
+        self.master = master
+        master.title("SETI Analysis (Run Only)")
+
+        # Select file button
+        self.select_btn = tk.Button(master, text="Select Observation File", command=self.select_file)
+        self.select_btn.pack(pady=10)
+
+        # Start analysis button
+        self.run_btn = tk.Button(master, text="Start Analysis", command=self.start_pipeline, state="disabled")
+        self.run_btn.pack(pady=10)
+
+        # Progress bar
+        self.progress = ttk.Progressbar(master, orient=tk.HORIZONTAL, length=300, mode='determinate')
+        self.progress.pack(pady=5)
+
+        self.selected_file = None
+
+    def select_file(self):
+        file_path = filedialog.askopenfilename(title="Select .fil or .h5 file", filetypes=[("Filterbank/HDF5 files", "*.fil *.h5")])
+        if file_path:
+            self.selected_file = file_path
+            self.run_btn.config(state="normal")
+            messagebox.showinfo("File Selected", f"Selected file:\n{file_path}")
+
+    def start_pipeline(self):
+        if not self.selected_file:
+            messagebox.showerror("No File", "Please select a file first.")
+            return
+
+        download_folder = os.path.dirname(self.selected_file)
+        self.progress['value'] = 5
+        self.master.update_idletasks()
+
+        # 1️⃣ blimpy waterfall
+        try:
+            wf = Waterfall(self.selected_file)
+            wf.plot_spectrum()
+        except Exception as e:
+            messagebox.showerror("blimpy Error", str(e))
+            return
+
+        self.progress['value'] = 50
+        self.master.update_idletasks()
+
+        # 2️⃣ turboSETI candidate search
+        try:
+            fd = FindDoppler(in_file=self.selected_file, out_dir=download_folder)
+            fd.search(max_drift=10, snr=10)
+        except Exception as e:
+            messagebox.showerror("turboSETI Error", str(e))
+            return
+
+        self.progress['value'] = 100
+        self.master.update_idletasks()
+        messagebox.showinfo("Completed", f"Analysis completed! Files are saved in:\n{download_folder}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = SETIAutoRunApp(root)
+    root.mainloop()
